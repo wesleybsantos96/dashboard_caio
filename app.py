@@ -173,6 +173,26 @@ def color_pl(val):
     return "color: #9e9e9e"
 
 
+def color_dist_row(row):
+    """CSS condicional para Dist. Strike dependendo se é CALL ou PUT."""
+    c = [""] * len(row)
+    if "Dist. Strike" not in row.index or "Tipo" not in row.index:
+        return c
+        
+    val = row["Dist. Strike"]
+    cat = row["Tipo"]
+    idx = row.index.get_loc("Dist. Strike")
+    
+    if pd.notnull(val):
+        if cat == "CALL":
+            # Para CALL, distância positiva (precisa subir) é segura (verde)
+            c[idx] = "color: #00c853; font-weight: 600" if val > 0 else "color: #ff1744; font-weight: 600"
+        else:
+            # Para PUT, distância negativa (precisa cair) é segura (verde)
+            c[idx] = "color: #00c853; font-weight: 600" if val < 0 else "color: #ff1744; font-weight: 600"
+    return c
+
+
 # ── CSS Customizado ──────────────────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -462,12 +482,9 @@ with tab_abertas:
         if current_cost is not None:
             total_opts_current_value += current_cost
 
-        # Moneyness
+        # Moneyness (Distância para o Strike)
         if price_sub and K:
-            if cat == "CALL":
-                moneyness = (price_sub - K) / K * 100
-            else:
-                moneyness = (K - price_sub) / K * 100
+            moneyness = (K - price_sub) / price_sub * 100
         else:
             moneyness = None
 
@@ -644,11 +661,13 @@ with tab_abertas:
             if has_pex:
                 fmt_map["Prob. Exec."] = lambda x: f"{x:.1f}%" if x is not None else "—"
 
-            color_cols = [c for c in ["P&L (R$)", "P&L (%)", "Dist. Strike"] if c in display_cols]
+            color_cols = [c for c in ["P&L (R$)", "P&L (%)"] if c in display_cols]
             styled_opts = display_df.style.format(fmt_map).map(
                 lambda x: color_pl(x) if isinstance(x, (int, float)) else "",
                 subset=color_cols
             )
+            if "Dist. Strike" in display_cols:
+                styled_opts = styled_opts.apply(color_dist_row, axis=1)
 
             st.dataframe(
                 styled_opts,
