@@ -1,0 +1,211 @@
+[
+ {
+  "sym": "ITSA4",
+  "qty": 10000,
+  "avg": 9.85,
+  "snap": {
+   "S": 13.83,
+   "ok": true,
+   "setor": "EMP. ADM. PART. - SEM SETOR PRINCIPAL",
+   "when": "03/09 12:05"
+  }
+ },
+ {
+  "sym": "BBDC4",
+  "qty": 10000,
+  "avg": 13.92,
+  "snap": {
+   "S": 17.74,
+   "ok": true,
+   "setor": "BANCOS",
+   "when": "03/09 12:05"
+  }
+ },
+ {
+  "sym": "KLBN4",
+  "qty": 50000,
+  "avg": 3.3,
+  "snap": {
+   "S": 3.87,
+   "ok": true,
+   "setor": "PAPEL E CELULOSE",
+   "when": "03/09 12:06"
+  }
+ },
+ {
+  "sym": "BRSR6",
+  "qty": 10000,
+  "avg": 11.01,
+  "snap": {
+   "S": 15.04,
+   "ok": true,
+   "setor": "BANCOS",
+   "when": "03/09 12:06"
+  }
+ },
+ {
+  "sym": "SANB11",
+  "qty": 4000,
+  "avg": 26.2,
+  "snap": {
+   "S": 30.1,
+   "ok": true,
+   "setor": "BANCOS",
+   "when": "03/09 12:06"
+  }
+ },
+ {
+  "sym": "BBAS3",
+  "qty": 5000,
+  "avg": 20.4,
+  "snap": {
+   "S": 22.66,
+   "ok": true,
+   "setor": "BANCOS",
+   "when": "03/09 12:07"
+  }
+ },
+ {
+  "sym": "ISAE4",
+  "qty": 3000,
+  "avg": 23.6,
+  "snap": {
+   "S": 28.03,
+   "ok": true,
+   "setor": null,
+   "when": "03/09 12:07"
+  }
+ },
+ {
+  "sym": "WIZC3",
+  "qty": 10000,
+  "avg": 6.08,
+  "snap": {
+   "S": 8.13,
+   "ok": true,
+   "setor": "SEGURADORAS E CORRETORAS",
+   "when": "03/09 12:07"
+  }
+ },
+ {
+  "sym": "SAPR4",
+  "qty": 10000,
+  "avg": 4.74,
+  "snap": {
+   "S": 6.9,
+   "ok": true,
+   "setor": "SANEAMENTO, SERV. ÁGUA E GÁS",
+   "when": "03/09 12:08"
+  }
+ },
+ {
+  "sym": "EGIE3",
+  "qty": 1700,
+  "avg": 30.79,
+  "snap": {
+   "S": 30.59,
+   "ok": true,
+   "setor": "ENERGIA ELÉTRICA",
+   "when": "03/09 12:08"
+  }
+ },
+ {
+  "sym": "ALUP11",
+  "qty": 1000,
+  "avg": 27.15,
+  "snap": {
+   "S": 33.72,
+   "ok": true,
+   "setor": "EMP. ADM. PART. - ENERGIA ELÉTRICA",
+   "when": "03/09 12:08"
+  }
+ },
+ {
+  "sym": "UNIP6",
+  "qty": 500,
+  "avg": 59.4,
+  "snap": {
+   "S": 58.55,
+   "ok": true,
+   "setor": "PETROQUÍMICOS E BORRACHA",
+   "when": "03/09 12:09"
+  }
+ },
+ {
+  "sym": "COGN3",
+  "qty": 10000,
+  "avg": 1.36,
+  "snap": {
+   "S": 2.39,
+   "ok": true,
+   "setor": "EMP. ADM. PART. - EDUCAÇÃO",
+   "when": "03/09 12:09"
+  }
+ },
+ {
+  "sym": "VALE3",
+  "qty": 3000,
+  "avg": 60.05,
+  "snap": {
+   "S": 78.81,
+   "ok": true,
+   "setor": "EXTRAÇÃO MINERAL",
+   "when": "03/09 12:09"
+  }
+ },
+ {
+  "sym": "CMIG4",
+  "qty": 10000,
+  "avg": 10.84,
+  "snap": {
+   "S": 11.15,
+   "ok": true,
+   "setor": "ENERGIA ELÉTRICA",
+   "when": "03/09 12:09"
+  }
+ },
+ {
+  "sym": "INBR32",
+  "qty": 1500,
+  "avg": 30.39,
+  "snap": {
+   "S": 29.51,
+   "ok": true,
+   "setor": null,
+   "when": "03/09 12:10"
+  }
+ },
+ {
+  "sym": "PETR4",
+  "qty": 7200,
+  "avg": 31.6,
+  "snap": {
+   "S": 48.42,
+   "ok": true,
+   "setor": "PETRÓLEO E GÁS",
+   "when": "03/09 12:10"
+  }
+ },
+ {
+  "sym": "AXIA3",
+  "qty": 2000,
+  "avg": 39.872004999999994,
+  "snap": {
+   "S": 56.15,
+   "ok": true,
+   "setor": null,
+   "when": "03/09 12:10"
+  }
+ },
+ {
+  "sym": "OBTC3",
+  "qty": 10700,
+  "avg": 6.725916822429906,
+  "snap": {
+   "S": 6.31,
+   "ok": true,
+   "setor": null,
+   "when": "03/09 12:10"
+  }
+ }
+]
