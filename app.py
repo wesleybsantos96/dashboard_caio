@@ -297,6 +297,33 @@ st.markdown("""
         margin-top: 32px;
         padding: 16px;
     }
+
+    /* Mobile Responsiveness */
+    @media (max-width: 768px) {
+        .main .block-container {
+            padding-top: 1rem;
+            padding-left: 0.8rem;
+            padding-right: 0.8rem;
+        }
+        .header-container {
+            padding: 16px 20px;
+            margin-bottom: 16px;
+        }
+        .header-title { font-size: 22px; }
+        .header-sub { font-size: 12px; }
+        .metric-card {
+            padding: 14px 16px;
+        }
+        .metric-label { font-size: 11px; }
+        .metric-value { font-size: 20px; }
+        .section-header { font-size: 16px; margin: 20px 0 10px 0; }
+        table { font-size: 11px; }
+        th { font-size: 10px !important; padding: 10px 8px !important; }
+        td { padding: 8px 8px !important; font-size: 11px !important; }
+        div[data-testid="stDataFrame"] > div {
+            border-radius: 8px;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
