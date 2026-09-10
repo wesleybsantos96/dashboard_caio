@@ -94,6 +94,7 @@ def load_positions():
             "cs": snap.get("cs", 100),
             "setor": snap.get("setor", ""),
             "status": snap.get("status", ""),
+            "pex": snap.get("pex"),  # probabilidade de execução (exercício)
         })
     return positions
 
@@ -380,9 +381,9 @@ for s in stocks:
         total_stocks_current += current
     stocks_data.append({
         "Ativo": sym,
-        "Qtd": qty,
         "PM": avg,
-        "Preço Atual": price,
+        "Spot": price,
+        "Qtd": qty,
         "Investido": invested,
         "Valor Atual": current,
         "P&L (R$)": pl,
@@ -441,19 +442,21 @@ for p in positions:
     opts_data.append({
         "Opção": sym,
         "Tipo": cat,
-        "Subjacente": par,
+        "Spot": price_sub,
         "Strike": K,
-        "Vencimento": due,
-        "DTE": dte,
+        "Dist. Strike": moneyness,
+        "Prob. Exec.": p["pex"] * 100 if p["pex"] is not None else None,
         "Qtd": qty,
-        "Entrada": entry,
+        "Prêmio Venda": entry,
         "Preço Atual": price_opt,
-        "Sub. Atual": price_sub,
-        "Prêmio Rec.": premium_received,
-        "Custo Recompra": current_cost,
         "P&L (R$)": pl_opt,
         "P&L (%)": pl_pct_opt,
-        "Moneyness%": moneyness,
+        # campos auxiliares (não exibidos na tabela principal)
+        "Subjacente": par,
+        "Vencimento": due,
+        "DTE": dte,
+        "Prêmio Rec.": premium_received,
+        "Custo Recompra": current_cost,
     })
 
 # Caixa
@@ -518,16 +521,18 @@ st.markdown('<div class="section-header">📈 Carteira de Ações</div>', unsafe
 df_stocks = pd.DataFrame(stocks_data)
 if not df_stocks.empty:
     df_stocks = df_stocks.sort_values("P&L (%)", ascending=False, na_position="last")
+    # Colunas na ordem solicitada
+    stocks_display_cols = ["Ativo", "PM", "Spot", "Qtd", "Investido", "Valor Atual", "P&L (R$)", "P&L (%)"]
+    df_stocks = df_stocks[stocks_display_cols]
 
-    # Formatação
     styled = df_stocks.style.format({
-        "PM": "R$ {:.2f}",
-        "Preço Atual": lambda x: f"R$ {x:.2f}" if x else "—",
-        "Investido": lambda x: f"R$ {x:,.2f}",
+        "PM":          "R$ {:.2f}",
+        "Spot":        lambda x: f"R$ {x:.2f}" if x else "—",
+        "Qtd":         "{:,.0f}",
+        "Investido":   lambda x: f"R$ {x:,.2f}",
         "Valor Atual": lambda x: f"R$ {x:,.2f}" if x else "—",
-        "P&L (R$)": lambda x: f"R$ {x:+,.2f}" if x is not None else "—",
-        "P&L (%)": lambda x: f"{x:+.1f}%" if x is not None else "—",
-        "Qtd": "{:,.0f}",
+        "P&L (R$)":   lambda x: f"R$ {x:+,.2f}" if x is not None else "—",
+        "P&L (%)":    lambda x: f"{x:+.1f}%" if x is not None else "—",
     }).map(lambda x: color_pl(x) if isinstance(x, (int, float)) else "",
            subset=["P&L (R$)", "P&L (%)"])
 
@@ -583,29 +588,35 @@ if not df_opts.empty:
             unsafe_allow_html=True
         )
 
-        # Preparar dados para exibição
+        # Preparar dados para exibição — colunas na ordem solicitada
+        has_pex = group["Prob. Exec."].notna().any()
         display_cols = [
-            "Opção", "Tipo", "Subjacente", "Strike", "Qtd",
-            "Entrada", "Preço Atual", "Sub. Atual",
-            "Prêmio Rec.", "Custo Recompra", "P&L (R$)", "P&L (%)", "Moneyness%"
+            "Opção", "Tipo", "Spot", "Strike", "Dist. Strike",
         ]
-        display_df = group[display_cols].copy()
-        display_df = display_df.sort_values("Subjacente")
+        if has_pex:
+            display_cols.append("Prob. Exec.")
+        display_cols += ["Qtd", "Prêmio Venda", "Preço Atual", "P&L (R$)", "P&L (%)"]
 
-        styled_opts = display_df.style.format({
-            "Strike": lambda x: f"R$ {x:.2f}" if x else "—",
-            "Qtd": "{:,.0f}",
-            "Entrada": "R$ {:.2f}",
-            "Preço Atual": lambda x: f"R$ {x:.2f}" if x is not None else "—",
-            "Sub. Atual": lambda x: f"R$ {x:.2f}" if x is not None else "—",
-            "Prêmio Rec.": lambda x: f"R$ {x:,.2f}",
-            "Custo Recompra": lambda x: f"R$ {x:,.2f}" if x is not None else "—",
-            "P&L (R$)": lambda x: f"R$ {x:+,.2f}" if x is not None else "—",
-            "P&L (%)": lambda x: f"{x:+.1f}%" if x is not None else "—",
-            "Moneyness%": lambda x: f"{x:+.1f}%" if x is not None else "—",
-        }).map(
+        display_df = group[display_cols].copy()
+        display_df = display_df.sort_values("Opção")
+
+        fmt_map = {
+            "Spot":         lambda x: f"R$ {x:.2f}" if x is not None else "—",
+            "Strike":       lambda x: f"R$ {x:.2f}" if x else "—",
+            "Dist. Strike": lambda x: f"{x:+.1f}%" if x is not None else "—",
+            "Qtd":          "{:,.0f}",
+            "Prêmio Venda": "R$ {:.2f}",
+            "Preço Atual":  lambda x: f"R$ {x:.2f}" if x is not None else "—",
+            "P&L (R$)":    lambda x: f"R$ {x:+,.2f}" if x is not None else "—",
+            "P&L (%)":     lambda x: f"{x:+.1f}%" if x is not None else "—",
+        }
+        if has_pex:
+            fmt_map["Prob. Exec."] = lambda x: f"{x:.1f}%" if x is not None else "—"
+
+        color_cols = [c for c in ["P&L (R$)", "P&L (%)", "Dist. Strike"] if c in display_cols]
+        styled_opts = display_df.style.format(fmt_map).map(
             lambda x: color_pl(x) if isinstance(x, (int, float)) else "",
-            subset=["P&L (R$)", "P&L (%)", "Moneyness%"]
+            subset=color_cols
         )
 
         st.dataframe(
