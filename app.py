@@ -775,11 +775,16 @@ with tab_fechadas:
             meses = sorted(list(set(x[:7] for x in df_hist["closed"] if x)), reverse=True)
             filtro_mes = st.selectbox("Mês de Encerramento", ["Todos"] + meses)
         with hf2:
-            filtro_tipo_hist = st.selectbox("Tipo de Opção", ["Todos", "CALL", "PUT"])
+            filtro_tipo_hist = st.selectbox("Tipo de Ativo", ["Todos (Opções + Ações)", "Apenas Opções", "Apenas Ações", "CALL", "PUT"])
             
         if filtro_mes != "Todos":
             df_hist = df_hist[df_hist["closed"].str.startswith(filtro_mes, na=False)]
-        if filtro_tipo_hist != "Todos":
+            
+        if filtro_tipo_hist == "Apenas Opções":
+            df_hist = df_hist[df_hist["cat"].isin(["CALL", "PUT"])]
+        elif filtro_tipo_hist == "Apenas Ações":
+            df_hist = df_hist[df_hist["cat"] == "ACAO"]
+        elif filtro_tipo_hist in ["CALL", "PUT"]:
             df_hist = df_hist[df_hist["cat"] == filtro_tipo_hist]
             
         if df_hist.empty:
