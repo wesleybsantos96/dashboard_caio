@@ -94,10 +94,36 @@ def load_positions():
             "cs": snap.get("cs", 100),
             "setor": snap.get("setor", ""),
             "status": snap.get("status", ""),
-            "pex": snap.get("pex"),  # probabilidade de execução (exercício)
+            "pex": snap.get("pex"),
         })
     return positions
 
+
+
+def load_history():
+    """Carrega histórico de posições fechadas."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute("SELECT * FROM historico ORDER BY closed DESC").fetchall()
+    except sqlite3.OperationalError:
+        rows = []
+    conn.close()
+    history = []
+    for r in rows:
+        history.append({
+            "closed": r["closed"],
+            "opened": r["opened"],
+            "sym": r["sym"],
+            "cat": r["cat"],
+            "qty": r["qty"],
+            "cs": r["cs"],
+            "entry": r["entry"],
+            "exit": r["exit"],
+            "pl": r["pl"],
+            "pct": r["pct"]
+        })
+    return history
 
 def load_stocks():
     """Carrega ações do acoes.json."""
@@ -331,6 +357,7 @@ st.markdown("""
 
 # ── Dados ─────────────────────────────────────────────────────────────────────
 positions = load_positions()
+history_data = load_history()
 stocks = load_stocks()
 caixa = load_caixa()
 
@@ -361,371 +388,437 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+tab_abertas, tab_fechadas = st.tabs(["📊 Posições Abertas", "📚 Histórico Fechado"])
 
-# ── Cálculos ──────────────────────────────────────────────────────────────────
-# Ações
-stocks_data = []
-total_stocks_invested = 0
-total_stocks_current = 0
-for s in stocks:
-    sym = s["sym"]
-    qty = s["qty"]
-    avg = s["avg"]
-    price = quotes.get(sym, s.get("snap", {}).get("S"))
-    invested = qty * avg
-    current = qty * price if price else None
-    pl = current - invested if current else None
-    pl_pct = (pl / invested * 100) if (pl is not None and invested > 0) else None
-    total_stocks_invested += invested
-    if current:
-        total_stocks_current += current
-    stocks_data.append({
-        "Ativo": sym,
-        "PM": avg,
-        "Spot": price,
-        "Qtd": qty,
-        "Investido": invested,
-        "Valor Atual": current,
-        "P&L (R$)": pl,
-        "P&L (%)": pl_pct,
-    })
+with tab_abertas:
 
-# Opções
-opts_data = []
-total_opts_premium = 0
-total_opts_current_value = 0
-for p in positions:
-    sym = p["sym"]
-    qty = p["qty"]
-    entry = p["entry"]
-    cat = p["cat"]
-    par = p["par"]
-    K = p["K"]
-    due = p["due"]
-    cs = p["cs"]
-    dte = days_to_expiry(due)
 
-    price_opt = quotes.get(sym)
-    price_sub = quotes.get(par) if par else None
 
-    # Prêmio recebido na venda (vendeu opção = recebeu prêmio)
-    premium_received = qty * entry * (cs if cs != 1 else 1) / 100  # normalize, cs already in multiplier
-    # Na verdade, o entry é o preço unitário por lote de cs.
-    # qty = número de contratos (cada um de cs ações/unidades)
-    # Financeiro de entrada = qty * entry (entry já é o preço total por contrato? Não...)
-    # Olhando os dados: qty=1000, entry=0.15, cs=100
-    # Isso significa 1000 opções vendidas a R$ 0.15 cada = R$ 150.00 recebidos
-    premium_received = qty * entry
+    # ── Cálculos ──────────────────────────────────────────────────────────────────
+    # Ações
+    stocks_data = []
+    total_stocks_invested = 0
+    total_stocks_current = 0
+    for s in stocks:
+        sym = s["sym"]
+        qty = s["qty"]
+        avg = s["avg"]
+        price = quotes.get(sym, s.get("snap", {}).get("S"))
+        invested = qty * avg
+        current = qty * price if price else None
+        pl = current - invested if current else None
+        pl_pct = (pl / invested * 100) if (pl is not None and invested > 0) else None
+        total_stocks_invested += invested
+        if current:
+            total_stocks_current += current
+        stocks_data.append({
+            "Ativo": sym,
+            "PM": avg,
+            "Spot": price,
+            "Qtd": qty,
+            "Investido": invested,
+            "Valor Atual": current,
+            "P&L (R$)": pl,
+            "P&L (%)": pl_pct,
+        })
 
-    if price_opt is not None:
-        current_cost = qty * price_opt  # custo de recompra
-        pl_opt = premium_received - current_cost  # Vendeu por X, recompra por Y -> lucro = X - Y
-        pl_pct_opt = (pl_opt / premium_received * 100) if premium_received > 0 else None
-    else:
-        current_cost = None
-        pl_opt = None
-        pl_pct_opt = None
+    # Opções
+    opts_data = []
+    total_opts_premium = 0
+    total_opts_current_value = 0
+    for p in positions:
+        sym = p["sym"]
+        qty = p["qty"]
+        entry = p["entry"]
+        cat = p["cat"]
+        par = p["par"]
+        K = p["K"]
+        due = p["due"]
+        cs = p["cs"]
+        dte = days_to_expiry(due)
 
-    total_opts_premium += premium_received
-    if current_cost is not None:
-        total_opts_current_value += current_cost
+        price_opt = quotes.get(sym)
+        price_sub = quotes.get(par) if par else None
 
-    # Moneyness
-    if price_sub and K:
-        if cat == "CALL":
-            moneyness = (price_sub - K) / K * 100
+        # Prêmio recebido na venda (vendeu opção = recebeu prêmio)
+        premium_received = qty * entry * (cs if cs != 1 else 1) / 100  # normalize, cs already in multiplier
+        # Na verdade, o entry é o preço unitário por lote de cs.
+        # qty = número de contratos (cada um de cs ações/unidades)
+        # Financeiro de entrada = qty * entry (entry já é o preço total por contrato? Não...)
+        # Olhando os dados: qty=1000, entry=0.15, cs=100
+        # Isso significa 1000 opções vendidas a R$ 0.15 cada = R$ 150.00 recebidos
+        premium_received = qty * entry
+
+        if price_opt is not None:
+            current_cost = qty * price_opt  # custo de recompra
+            pl_opt = premium_received - current_cost  # Vendeu por X, recompra por Y -> lucro = X - Y
+            pl_pct_opt = (pl_opt / premium_received * 100) if premium_received > 0 else None
         else:
-            moneyness = (K - price_sub) / K * 100
-    else:
-        moneyness = None
+            current_cost = None
+            pl_opt = None
+            pl_pct_opt = None
 
-    opts_data.append({
-        "Opção": sym,
-        "Tipo": cat,
-        "Spot": price_sub,
-        "Strike": K,
-        "Dist. Strike": moneyness,
-        "Prob. Exec.": p["pex"] * 100 if p["pex"] is not None else None,
-        "Qtd": qty,
-        "Prêmio Venda": entry,
-        "Preço Atual": price_opt,
-        "P&L (R$)": pl_opt,
-        "P&L (%)": pl_pct_opt,
-        # campos auxiliares (não exibidos na tabela principal)
-        "Subjacente": par,
-        "Vencimento": due,
-        "DTE": dte,
-        "Prêmio Rec.": premium_received,
-        "Custo Recompra": current_cost,
-    })
+        total_opts_premium += premium_received
+        if current_cost is not None:
+            total_opts_current_value += current_cost
 
-# Caixa
-total_caixa = sum(c.get("valor", 0) for c in caixa)
-
-# Totais
-total_pl_stocks = total_stocks_current - total_stocks_invested
-total_pl_opts = total_opts_premium - total_opts_current_value
-total_invested_all = total_stocks_invested
-total_portfolio = total_stocks_current + total_caixa
-total_pl_all = total_pl_stocks + total_pl_opts
-
-# ── Métricas Resumo ──────────────────────────────────────────────────────────
-c1, c2, c3, c4, c5 = st.columns(5)
-
-def metric_card(label, value, css_class=""):
-    return f"""
-    <div class="metric-card">
-        <div class="metric-label">{label}</div>
-        <div class="metric-value {css_class}">{value}</div>
-    </div>
-    """
-
-with c1:
-    st.markdown(metric_card("Carteira Ações", fmt_brl(total_stocks_current)), unsafe_allow_html=True)
-with c2:
-    cls = "positive" if total_pl_stocks >= 0 else "negative"
-    st.markdown(metric_card("P&L Ações", fmt_brl(total_pl_stocks), cls), unsafe_allow_html=True)
-with c3:
-    st.markdown(metric_card("Prêmios Recebidos", fmt_brl(total_opts_premium)), unsafe_allow_html=True)
-with c4:
-    cls = "positive" if total_pl_opts >= 0 else "negative"
-    st.markdown(metric_card("P&L Opções", fmt_brl(total_pl_opts), cls), unsafe_allow_html=True)
-with c5:
-    st.markdown(metric_card("Caixa", fmt_brl(total_caixa)), unsafe_allow_html=True)
-
-st.markdown("")
-
-# Segunda faixa de métricas
-c6, c7, c8, c9, c10 = st.columns(5)
-with c6:
-    st.markdown(metric_card("Investido (Ações)", fmt_brl(total_stocks_invested)), unsafe_allow_html=True)
-with c7:
-    rent_pct = (total_pl_stocks / total_stocks_invested * 100) if total_stocks_invested > 0 else 0
-    cls = "positive" if rent_pct >= 0 else "negative"
-    st.markdown(metric_card("Rent. Ações", fmt_pct(rent_pct), cls), unsafe_allow_html=True)
-with c8:
-    st.markdown(metric_card("Posições Opções", str(len(positions))), unsafe_allow_html=True)
-with c9:
-    calls = sum(1 for p in opts_data if p["Tipo"] == "CALL")
-    puts = sum(1 for p in opts_data if p["Tipo"] == "PUT")
-    st.markdown(metric_card("CALL / PUT", f"{calls} / {puts}"), unsafe_allow_html=True)
-with c10:
-    cls = "positive" if total_pl_all >= 0 else "negative"
-    st.markdown(metric_card("P&L Total", fmt_brl(total_pl_all), cls), unsafe_allow_html=True)
-
-st.markdown("")
-
-# ── Tabela de Ações ──────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">📈 Carteira de Ações</div>', unsafe_allow_html=True)
-
-df_stocks = pd.DataFrame(stocks_data)
-if not df_stocks.empty:
-    df_stocks = df_stocks.sort_values("P&L (%)", ascending=False, na_position="last")
-    # Colunas na ordem solicitada
-    stocks_display_cols = ["Ativo", "PM", "Spot", "Qtd", "Investido", "Valor Atual", "P&L (R$)", "P&L (%)"]
-    df_stocks = df_stocks[stocks_display_cols]
-
-    styled = df_stocks.style.format({
-        "PM":          "R$ {:.2f}",
-        "Spot":        lambda x: f"R$ {x:.2f}" if x else "—",
-        "Qtd":         "{:,.0f}",
-        "Investido":   lambda x: f"R$ {x:,.2f}",
-        "Valor Atual": lambda x: f"R$ {x:,.2f}" if x else "—",
-        "P&L (R$)":   lambda x: f"R$ {x:+,.2f}" if x is not None else "—",
-        "P&L (%)":    lambda x: f"{x:+.1f}%" if x is not None else "—",
-    }).map(lambda x: color_pl(x) if isinstance(x, (int, float)) else "",
-           subset=["P&L (R$)", "P&L (%)"])
-
-    st.dataframe(
-        styled,
-        use_container_width=True,
-        hide_index=True,
-        height=min(len(df_stocks) * 38 + 40, 600),
-    )
-else:
-    st.info("Nenhuma ação na carteira.")
-
-st.markdown("")
-
-# ── Tabela de Opções ─────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">🎯 Posições de Opções (Vendas)</div>', unsafe_allow_html=True)
-
-# Filtros
-fc1, fc2, fc3 = st.columns([1, 1, 2])
-with fc1:
-    filter_type = st.selectbox("Tipo", ["Todos", "CALL", "PUT"], index=0)
-with fc2:
-    vencimentos = sorted(set(p["Vencimento"] for p in opts_data if p["Vencimento"]))
-    filter_due = st.selectbox("Vencimento", ["Todos"] + vencimentos, index=0)
-
-df_opts = pd.DataFrame(opts_data)
-if not df_opts.empty:
-    if filter_type != "Todos":
-        df_opts = df_opts[df_opts["Tipo"] == filter_type]
-    if filter_due != "Todos":
-        df_opts = df_opts[df_opts["Vencimento"] == filter_due]
-
-    # Agrupamento por vencimento
-    for due_date in sorted(df_opts["Vencimento"].unique()):
-        group = df_opts[df_opts["Vencimento"] == due_date].copy()
-        dte_val = group["DTE"].iloc[0] if not group.empty else None
-
-        # DTE badge
-        if dte_val is not None:
-            if dte_val <= 5:
-                dte_class = "dte-danger"
-            elif dte_val <= 15:
-                dte_class = "dte-warn"
+        # Moneyness
+        if price_sub and K:
+            if cat == "CALL":
+                moneyness = (price_sub - K) / K * 100
             else:
-                dte_class = "dte-ok"
-            dte_html = f'<span class="dte-badge {dte_class}">{dte_val}d</span>'
+                moneyness = (K - price_sub) / K * 100
         else:
-            dte_html = ""
+            moneyness = None
 
-        st.markdown(
-            f'<div style="margin: 16px 0 6px 0; font-size: 14px; font-weight: 600; color: #b0bec5;">'
-            f'📅 Vencimento: {due_date} &nbsp; {dte_html}</div>',
-            unsafe_allow_html=True
-        )
+        opts_data.append({
+            "Opção": sym,
+            "Tipo": cat,
+            "Spot": price_sub,
+            "Strike": K,
+            "Dist. Strike": moneyness,
+            "Prob. Exec.": p["pex"] * 100 if p["pex"] is not None else None,
+            "Qtd": qty,
+            "Prêmio Venda": entry,
+            "Preço Atual": price_opt,
+            "P&L (R$)": pl_opt,
+            "P&L (%)": pl_pct_opt,
+            # campos auxiliares
+            "Subjacente": par,
+            "Vencimento": due,
+            "DTE": dte,
+            "Prêmio Rec.": premium_received,
+            "Custo Recompra": current_cost,
+        })
 
-        # Preparar dados para exibição — colunas na ordem solicitada
-        has_pex = group["Prob. Exec."].notna().any()
-        display_cols = [
-            "Opção", "Tipo", "Spot", "Strike", "Dist. Strike",
-        ]
-        if has_pex:
-            display_cols.append("Prob. Exec.")
-        display_cols += ["Qtd", "Prêmio Venda", "Preço Atual", "P&L (R$)", "P&L (%)"]
+    # Caixa
+    total_caixa = sum(c.get("valor", 0) for c in caixa)
 
-        display_df = group[display_cols].copy()
-        display_df = display_df.sort_values("Opção")
+    # Totais
+    total_pl_stocks = total_stocks_current - total_stocks_invested
+    total_pl_opts = total_opts_premium - total_opts_current_value
+    total_invested_all = total_stocks_invested
+    total_portfolio = total_stocks_current + total_caixa
+    total_pl_all = total_pl_stocks + total_pl_opts
 
-        fmt_map = {
-            "Spot":         lambda x: f"R$ {x:.2f}" if x is not None else "—",
-            "Strike":       lambda x: f"R$ {x:.2f}" if x else "—",
-            "Dist. Strike": lambda x: f"{x:+.1f}%" if x is not None else "—",
-            "Qtd":          "{:,.0f}",
-            "Prêmio Venda": "R$ {:.2f}",
-            "Preço Atual":  lambda x: f"R$ {x:.2f}" if x is not None else "—",
-            "P&L (R$)":    lambda x: f"R$ {x:+,.2f}" if x is not None else "—",
-            "P&L (%)":     lambda x: f"{x:+.1f}%" if x is not None else "—",
-        }
-        if has_pex:
-            fmt_map["Prob. Exec."] = lambda x: f"{x:.1f}%" if x is not None else "—"
+    # ── Métricas Resumo ──────────────────────────────────────────────────────────
+    c1, c2, c3, c4, c5 = st.columns(5)
 
-        color_cols = [c for c in ["P&L (R$)", "P&L (%)", "Dist. Strike"] if c in display_cols]
-        styled_opts = display_df.style.format(fmt_map).map(
-            lambda x: color_pl(x) if isinstance(x, (int, float)) else "",
-            subset=color_cols
-        )
+    def metric_card(label, value, css_class=""):
+        return f"""
+        <div class="metric-card">
+            <div class="metric-label">{label}</div>
+            <div class="metric-value {css_class}">{value}</div>
+        </div>
+        """
+
+    with c1:
+        st.markdown(metric_card("Carteira Ações", fmt_brl(total_stocks_current)), unsafe_allow_html=True)
+    with c2:
+        cls = "positive" if total_pl_stocks >= 0 else "negative"
+        st.markdown(metric_card("P&L Ações", fmt_brl(total_pl_stocks), cls), unsafe_allow_html=True)
+    with c3:
+        st.markdown(metric_card("Prêmios Recebidos", fmt_brl(total_opts_premium)), unsafe_allow_html=True)
+    with c4:
+        cls = "positive" if total_pl_opts >= 0 else "negative"
+        st.markdown(metric_card("P&L Opções", fmt_brl(total_pl_opts), cls), unsafe_allow_html=True)
+    with c5:
+        st.markdown(metric_card("Caixa", fmt_brl(total_caixa)), unsafe_allow_html=True)
+
+    st.markdown("")
+
+    # Segunda faixa de métricas
+    c6, c7, c8, c9, c10 = st.columns(5)
+    with c6:
+        st.markdown(metric_card("Investido (Ações)", fmt_brl(total_stocks_invested)), unsafe_allow_html=True)
+    with c7:
+        rent_pct = (total_pl_stocks / total_stocks_invested * 100) if total_stocks_invested > 0 else 0
+        cls = "positive" if rent_pct >= 0 else "negative"
+        st.markdown(metric_card("Rent. Ações", fmt_pct(rent_pct), cls), unsafe_allow_html=True)
+    with c8:
+        st.markdown(metric_card("Posições Opções", str(len(positions))), unsafe_allow_html=True)
+    with c9:
+        calls = sum(1 for p in opts_data if p["Tipo"] == "CALL")
+        puts = sum(1 for p in opts_data if p["Tipo"] == "PUT")
+        st.markdown(metric_card("CALL / PUT", f"{calls} / {puts}"), unsafe_allow_html=True)
+    with c10:
+        cls = "positive" if total_pl_all >= 0 else "negative"
+        st.markdown(metric_card("P&L Total", fmt_brl(total_pl_all), cls), unsafe_allow_html=True)
+
+    st.markdown("")
+
+    # ── Tabela de Ações ──────────────────────────────────────────────────────────
+    st.markdown('<div class="section-header">📈 Carteira de Ações</div>', unsafe_allow_html=True)
+
+    df_stocks = pd.DataFrame(stocks_data)
+    if not df_stocks.empty:
+        df_stocks = df_stocks.sort_values("P&L (%)", ascending=False, na_position="last")
+        stocks_display_cols = ["Ativo", "PM", "Spot", "Qtd", "Investido", "Valor Atual", "P&L (R$)", "P&L (%)"]
+        df_stocks = df_stocks[stocks_display_cols]
+
+        styled = df_stocks.style.format({
+            "PM":          "R$ {:.2f}",
+            "Spot":        lambda x: f"R$ {x:.2f}" if x else "—",
+            "Qtd":         "{:,.0f}",
+            "Investido":   lambda x: f"R$ {x:,.2f}",
+            "Valor Atual": lambda x: f"R$ {x:,.2f}" if x else "—",
+            "P&L (R$)":   lambda x: f"R$ {x:+,.2f}" if x is not None else "—",
+            "P&L (%)":    lambda x: f"{x:+.1f}%" if x is not None else "—",
+        }).map(lambda x: color_pl(x) if isinstance(x, (int, float)) else "",
+               subset=["P&L (R$)", "P&L (%)"])
 
         st.dataframe(
-            styled_opts,
+            styled,
             use_container_width=True,
             hide_index=True,
-            height=min(len(display_df) * 38 + 40, 500),
+            height=min(len(df_stocks) * 38 + 40, 600),
+        )
+    else:
+        st.info("Nenhuma ação na carteira.")
+
+    st.markdown("")
+
+    # ── Tabela de Opções ─────────────────────────────────────────────────────────
+    st.markdown('<div class="section-header">🎯 Posições de Opções (Vendas)</div>', unsafe_allow_html=True)
+
+    # Filtros
+    fc1, fc2, fc3 = st.columns([1, 1, 2])
+    with fc1:
+        filter_type = st.selectbox("Tipo", ["Todos", "CALL", "PUT"], index=0)
+    with fc2:
+        vencimentos = sorted(set(p["Vencimento"] for p in opts_data if p["Vencimento"]))
+        filter_due = st.selectbox("Vencimento", ["Todos"] + vencimentos, index=0)
+
+    df_opts = pd.DataFrame(opts_data)
+    if not df_opts.empty:
+        if filter_type != "Todos":
+            df_opts = df_opts[df_opts["Tipo"] == filter_type]
+        if filter_due != "Todos":
+            df_opts = df_opts[df_opts["Vencimento"] == filter_due]
+
+        # Agrupamento por vencimento
+        for due_date in sorted(df_opts["Vencimento"].unique()):
+            group = df_opts[df_opts["Vencimento"] == due_date].copy()
+            dte_val = group["DTE"].iloc[0] if not group.empty else None
+
+            # DTE badge
+            if dte_val is not None:
+                if dte_val <= 5:
+                    dte_class = "dte-danger"
+                elif dte_val <= 15:
+                    dte_class = "dte-warn"
+                else:
+                    dte_class = "dte-ok"
+                dte_html = f'<span class="dte-badge {dte_class}">{dte_val}d</span>'
+            else:
+                dte_html = ""
+
+            st.markdown(
+                f'<div style="margin: 16px 0 6px 0; font-size: 14px; font-weight: 600; color: #b0bec5;">'
+                f'📅 Vencimento: {due_date} &nbsp; {dte_html}</div>',
+                unsafe_allow_html=True
+            )
+
+            # Preparar dados para exibição — colunas na ordem solicitada
+            has_pex = group["Prob. Exec."].notna().any()
+            display_cols = [
+                "Opção", "Tipo", "Spot", "Strike", "Dist. Strike",
+            ]
+            if has_pex:
+                display_cols.append("Prob. Exec.")
+            display_cols += ["Qtd", "Prêmio Venda", "Preço Atual", "P&L (R$)", "P&L (%)"]
+
+            display_df = group[display_cols].copy()
+            display_df = display_df.sort_values("Opção")
+
+            fmt_map = {
+                "Spot":         lambda x: f"R$ {x:.2f}" if x is not None else "—",
+                "Strike":       lambda x: f"R$ {x:.2f}" if x else "—",
+                "Dist. Strike": lambda x: f"{x:+.1f}%" if x is not None else "—",
+                "Qtd":          "{:,.0f}",
+                "Prêmio Venda": "R$ {:.2f}",
+                "Preço Atual":  lambda x: f"R$ {x:.2f}" if x is not None else "—",
+                "P&L (R$)":    lambda x: f"R$ {x:+,.2f}" if x is not None else "—",
+                "P&L (%)":     lambda x: f"{x:+.1f}%" if x is not None else "—",
+            }
+            if has_pex:
+                fmt_map["Prob. Exec."] = lambda x: f"{x:.1f}%" if x is not None else "—"
+
+            color_cols = [c for c in ["P&L (R$)", "P&L (%)", "Dist. Strike"] if c in display_cols]
+            styled_opts = display_df.style.format(fmt_map).map(
+                lambda x: color_pl(x) if isinstance(x, (int, float)) else "",
+                subset=color_cols
+            )
+
+            st.dataframe(
+                styled_opts,
+                use_container_width=True,
+                hide_index=True,
+                height=min(len(display_df) * 38 + 40, 500),
+            )
+
+            # Subtotal do vencimento
+            grp_premium = group["Prêmio Rec."].sum()
+            grp_cost = group["Custo Recompra"].sum()
+            grp_pl = group["P&L (R$)"].sum()
+            cl = "positive" if grp_pl >= 0 else "negative"
+            st.markdown(
+                f'<div style="text-align:right; font-size:13px; color: rgba(255,255,255,0.5); margin-bottom: 8px;">'
+                f'Subtotal: Prêmio {fmt_brl(grp_premium)} &nbsp;|&nbsp; '
+                f'Recompra {fmt_brl(grp_cost)} &nbsp;|&nbsp; '
+                f'<span class="metric-value {cl}" style="font-size:13px;">P&L {fmt_brl(grp_pl)}</span>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+
+    else:
+        st.info("Nenhuma posição de opções aberta.")
+
+    st.markdown("")
+
+    # ── Caixa ────────────────────────────────────────────────────────────────────
+    if caixa:
+        st.markdown('<div class="section-header">💰 Caixa / Reservas</div>', unsafe_allow_html=True)
+        df_caixa = pd.DataFrame(caixa)
+        df_caixa.columns = ["Aplicação", "Valor", "Disponível"]
+        df_caixa["Disponível"] = df_caixa["Disponível"].map({True: "✅ Sim", False: "❌ Não"})
+
+        styled_caixa = df_caixa.style.format({
+            "Valor": lambda x: fmt_brl(x) if isinstance(x, (int, float)) else x,
+        })
+
+        st.dataframe(styled_caixa, use_container_width=True, hide_index=True, height=120)
+
+    # ── Exposição por Subjacente ─────────────────────────────────────────────────
+    st.markdown('<div class="section-header">🔍 Exposição por Subjacente</div>', unsafe_allow_html=True)
+
+    # Agrupar opções por subjacente
+    if opts_data:
+        exposure = {}
+        for p in opts_data:
+            par = p["Subjacente"] or "N/A"
+            if par not in exposure:
+                exposure[par] = {
+                    "Subjacente": par,
+                    "Preço Sub.": p["Spot"],
+                    "Calls": 0,
+                    "Puts": 0,
+                    "Prêmio Total": 0,
+                    "P&L Opções": 0,
+                }
+            if p["Tipo"] == "CALL":
+                exposure[par]["Calls"] += p["Qtd"]
+            else:
+                exposure[par]["Puts"] += p["Qtd"]
+            exposure[par]["Prêmio Total"] += p["Prêmio Rec."]
+            if p["P&L (R$)"] is not None:
+                exposure[par]["P&L Opções"] += p["P&L (R$)"]
+
+        # Adicionar posição de ações
+        for s in stocks_data:
+            sym = s["Ativo"]
+            if sym in exposure:
+                exposure[sym]["Ações Qtd"] = s["Qtd"]
+                exposure[sym]["Ações P&L"] = s["P&L (R$)"]
+            else:
+                exposure[sym] = {
+                    "Subjacente": sym,
+                    "Preço Sub.": s["Spot"],
+                    "Calls": 0,
+                    "Puts": 0,
+                    "Prêmio Total": 0,
+                    "P&L Opções": 0,
+                    "Ações Qtd": s["Qtd"],
+                    "Ações P&L": s["P&L (R$)"],
+                }
+
+        df_exposure = pd.DataFrame(exposure.values())
+        if "Ações Qtd" not in df_exposure.columns:
+            df_exposure["Ações Qtd"] = 0
+        if "Ações P&L" not in df_exposure.columns:
+            df_exposure["Ações P&L"] = 0
+        df_exposure = df_exposure.fillna(0)
+        df_exposure["P&L Combinado"] = df_exposure["P&L Opções"] + df_exposure["Ações P&L"]
+        df_exposure = df_exposure.sort_values("Prêmio Total", ascending=False)
+
+        styled_exp = df_exposure.style.format({
+            "Preço Sub.": lambda x: f"R$ {x:.2f}" if x else "—",
+            "Calls": "{:,.0f}",
+            "Puts": "{:,.0f}",
+            "Ações Qtd": "{:,.0f}",
+            "Prêmio Total": lambda x: fmt_brl(x),
+            "P&L Opções": lambda x: f"R$ {x:+,.2f}" if x else "—",
+            "Ações P&L": lambda x: f"R$ {x:+,.2f}" if x else "—",
+            "P&L Combinado": lambda x: f"R$ {x:+,.2f}" if x else "—",
+        }).map(
+            lambda x: color_pl(x) if isinstance(x, (int, float)) else "",
+            subset=["P&L Opções", "Ações P&L", "P&L Combinado"]
         )
 
-        # Subtotal do vencimento
-        grp_premium = group["Prêmio Rec."].sum()
-        grp_cost = group["Custo Recompra"].sum()
-        grp_pl = group["P&L (R$)"].sum()
-        cl = "positive" if grp_pl >= 0 else "negative"
-        st.markdown(
-            f'<div style="text-align:right; font-size:13px; color: rgba(255,255,255,0.5); margin-bottom: 8px;">'
-            f'Subtotal: Prêmio {fmt_brl(grp_premium)} &nbsp;|&nbsp; '
-            f'Recompra {fmt_brl(grp_cost)} &nbsp;|&nbsp; '
-            f'<span class="metric-value {cl}" style="font-size:13px;">P&L {fmt_brl(grp_pl)}</span>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
+        st.dataframe(styled_exp, use_container_width=True, hide_index=True,
+                     height=min(len(df_exposure) * 38 + 40, 600))
 
-else:
-    st.info("Nenhuma posição de opções aberta.")
 
-st.markdown("")
+with tab_fechadas:
 
-# ── Caixa ────────────────────────────────────────────────────────────────────
-if caixa:
-    st.markdown('<div class="section-header">💰 Caixa / Reservas</div>', unsafe_allow_html=True)
-    df_caixa = pd.DataFrame(caixa)
-    df_caixa.columns = ["Aplicação", "Valor", "Disponível"]
-    df_caixa["Disponível"] = df_caixa["Disponível"].map({True: "✅ Sim", False: "❌ Não"})
-
-    styled_caixa = df_caixa.style.format({
-        "Valor": lambda x: fmt_brl(x) if isinstance(x, (int, float)) else x,
-    })
-
-    st.dataframe(styled_caixa, use_container_width=True, hide_index=True, height=120)
-
-# ── Exposição por Subjacente ─────────────────────────────────────────────────
-st.markdown('<div class="section-header">🔍 Exposição por Subjacente</div>', unsafe_allow_html=True)
-
-# Agrupar opções por subjacente
-if opts_data:
-    exposure = {}
-    for p in opts_data:
-        par = p["Subjacente"] or "N/A"
-        if par not in exposure:
-            exposure[par] = {
-                "Subjacente": par,
-                "Preço Sub.": p["Spot"],
-                "Calls": 0,
-                "Puts": 0,
-                "Prêmio Total": 0,
-                "P&L Opções": 0,
-            }
-        if p["Tipo"] == "CALL":
-            exposure[par]["Calls"] += p["Qtd"]
+    # ── Aba 2: Histórico ─────────────────────────────────────────────────────────
+    st.markdown('<div class="section-header">📚 Histórico de Operações Encerradas</div>', unsafe_allow_html=True)
+    
+    if not history_data:
+        st.info("Nenhuma posição fechada encontrada no histórico.")
+    else:
+        df_hist = pd.DataFrame(history_data)
+        
+        # Filtros do Histórico
+        hf1, hf2 = st.columns([1, 1])
+        with hf1:
+            meses = sorted(list(set(x[:7] for x in df_hist["closed"] if x)), reverse=True)
+            filtro_mes = st.selectbox("Mês de Encerramento", ["Todos"] + meses)
+        with hf2:
+            filtro_tipo_hist = st.selectbox("Tipo de Opção", ["Todos", "CALL", "PUT"])
+            
+        if filtro_mes != "Todos":
+            df_hist = df_hist[df_hist["closed"].str.startswith(filtro_mes, na=False)]
+        if filtro_tipo_hist != "Todos":
+            df_hist = df_hist[df_hist["cat"] == filtro_tipo_hist]
+            
+        if df_hist.empty:
+            st.warning("Nenhuma operação encontrada para os filtros selecionados.")
         else:
-            exposure[par]["Puts"] += p["Qtd"]
-        exposure[par]["Prêmio Total"] += p["Prêmio Rec."]
-        if p["P&L (R$)"] is not None:
-            exposure[par]["P&L Opções"] += p["P&L (R$)"]
+            # Métricas do período
+            total_pl_hist = df_hist["pl"].sum()
+            win_rate = (df_hist["pl"] > 0).mean() * 100
+            melhor_trade = df_hist["pl"].max()
+            pior_trade = df_hist["pl"].min()
+            
+            hc1, hc2, hc3, hc4 = st.columns(4)
+            with hc1:
+                cls = "positive" if total_pl_hist >= 0 else "negative"
+                st.markdown(metric_card("P&L do Período", fmt_brl(total_pl_hist), cls), unsafe_allow_html=True)
+            with hc2:
+                st.markdown(metric_card("Taxa de Acerto (Win Rate)", f"{win_rate:.1f}%"), unsafe_allow_html=True)
+            with hc3:
+                st.markdown(metric_card("Melhor Trade", fmt_brl(melhor_trade), "positive"), unsafe_allow_html=True)
+            with hc4:
+                st.markdown(metric_card("Pior Trade", fmt_brl(pior_trade), "negative"), unsafe_allow_html=True)
+                
+            st.markdown("")
+            
+            # Formatar Tabela
+            df_hist_disp = df_hist[["closed", "opened", "sym", "cat", "qty", "entry", "exit", "pl", "pct"]].copy()
+            df_hist_disp.columns = ["Data Fech.", "Data Abert.", "Opção", "Tipo", "Qtd", "Entrada", "Saída", "P&L (R$)", "P&L (%)"]
+            
+            styled_hist = df_hist_disp.style.format({
+                "Qtd": "{:,.0f}",
+                "Entrada": "R$ {:.2f}",
+                "Saída": lambda x: f"R$ {x:.2f}" if pd.notnull(x) else "—",
+                "P&L (R$)": lambda x: f"R$ {x:+,.2f}" if pd.notnull(x) else "—",
+                "P&L (%)": lambda x: f"{x:+.1f}%" if pd.notnull(x) else "—",
+            }).map(lambda x: color_pl(x) if isinstance(x, (int, float)) else "",
+                   subset=["P&L (R$)", "P&L (%)"])
+                   
+            st.dataframe(styled_hist, use_container_width=True, hide_index=True, height=min(len(df_hist_disp) * 38 + 40, 600))
 
-    # Adicionar posição de ações
-    for s in stocks_data:
-        sym = s["Ativo"]
-        if sym in exposure:
-            exposure[sym]["Ações Qtd"] = s["Qtd"]
-            exposure[sym]["Ações P&L"] = s["P&L (R$)"]
-        else:
-            exposure[sym] = {
-                "Subjacente": sym,
-                "Preço Sub.": s["Spot"],
-                "Calls": 0,
-                "Puts": 0,
-                "Prêmio Total": 0,
-                "P&L Opções": 0,
-                "Ações Qtd": s["Qtd"],
-                "Ações P&L": s["P&L (R$)"],
-            }
-
-    df_exposure = pd.DataFrame(exposure.values())
-    if "Ações Qtd" not in df_exposure.columns:
-        df_exposure["Ações Qtd"] = 0
-    if "Ações P&L" not in df_exposure.columns:
-        df_exposure["Ações P&L"] = 0
-    df_exposure = df_exposure.fillna(0)
-    df_exposure["P&L Combinado"] = df_exposure["P&L Opções"] + df_exposure["Ações P&L"]
-    df_exposure = df_exposure.sort_values("Prêmio Total", ascending=False)
-
-    styled_exp = df_exposure.style.format({
-        "Preço Sub.": lambda x: f"R$ {x:.2f}" if x else "—",
-        "Calls": "{:,.0f}",
-        "Puts": "{:,.0f}",
-        "Ações Qtd": "{:,.0f}",
-        "Prêmio Total": lambda x: fmt_brl(x),
-        "P&L Opções": lambda x: f"R$ {x:+,.2f}" if x else "—",
-        "Ações P&L": lambda x: f"R$ {x:+,.2f}" if x else "—",
-        "P&L Combinado": lambda x: f"R$ {x:+,.2f}" if x else "—",
-    }).map(
-        lambda x: color_pl(x) if isinstance(x, (int, float)) else "",
-        subset=["P&L Opções", "Ações P&L", "P&L Combinado"]
-    )
-
-    st.dataframe(styled_exp, use_container_width=True, hide_index=True,
-                 height=min(len(df_exposure) * 38 + 40, 600))
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown(
