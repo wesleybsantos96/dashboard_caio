@@ -669,7 +669,7 @@ if opts_data:
         if par not in exposure:
             exposure[par] = {
                 "Subjacente": par,
-                "Preço Sub.": p["Sub. Atual"],
+                "Preço Sub.": p["Spot"],
                 "Calls": 0,
                 "Puts": 0,
                 "Prêmio Total": 0,
@@ -692,7 +692,7 @@ if opts_data:
         else:
             exposure[sym] = {
                 "Subjacente": sym,
-                "Preço Sub.": s["Preço Atual"],
+                "Preço Sub.": s["Spot"],
                 "Calls": 0,
                 "Puts": 0,
                 "Prêmio Total": 0,
